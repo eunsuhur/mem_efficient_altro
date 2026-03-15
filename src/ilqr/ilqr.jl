@@ -48,7 +48,7 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,C} <: UnconstrainedSolver{T
     ρ::Vector{T}   # Regularization
     dρ::Vector{T}  # Regularization rate of change
 
-    cache::FiniteDiff.JacobianCache{Vector{T}, Vector{T}, Vector{T}, UnitRange{Int}, Nothing, Val{:forward}(), T}
+    cache::FiniteDiff.JacobianCache
     exp_cache::C
     grad::Vector{T}  # Gradient
 
