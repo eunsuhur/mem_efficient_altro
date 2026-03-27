@@ -41,7 +41,7 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
         exit = evaluate_convergence(solver, i)
 
         # check if the cost function is quadratic
-        if !grad_only && solver.opts.reuse_jacobians && TO.is_quadratic(solver.E)
+        if !solver.opts.memory_efficient && !grad_only && solver.opts.reuse_jacobians && TO.is_quadratic(solver.E)
             @logmsg InnerLoop "Gradient-only LQR"
             grad_only = true  # skip updating feedback gain matrix (feedforward only)
         end
@@ -79,6 +79,8 @@ end
 # end
 
 function step!(solver::iLQRSolver{<:Any,<:Any,L}, J, grad_only::Bool=false) where L
+    solver.opts.memory_efficient && return step_memory_efficient!(solver, J)
+
     to = solver.stats.to
     init = !solver.opts.reuse_jacobians  # force recalculation if not reusing
     @timeit_debug to "diff jac"     TO.state_diff_jacobian!(solver.G, solver.model, solver.Z)

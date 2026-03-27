@@ -29,6 +29,7 @@ end
     include("constructors.jl")
     include("augmented_lagrangian_tests.jl")
     include("solve_tests.jl")
+    include("pn_memeff_forwardad_regression.jl")
     include("finite_diff.jl")
     include("socp_test.jl")
 end

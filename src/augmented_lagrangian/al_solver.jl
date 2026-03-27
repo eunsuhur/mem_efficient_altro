@@ -41,6 +41,12 @@ function AugmentedLagrangianSolver(
         kwarg_opts...
     ) where {Q,T}
     set_options!(opts; kwarg_opts...)
+    if opts.memory_efficient
+        if stats.parent == solvername(AugmentedLagrangianSolver)
+            stats = SolverStats{T}(parent=solvername(MemEffAugmentedLagrangianSolver))
+        end
+        return MemEffAugmentedLagrangianSolver(prob, opts, stats; solver_uncon=solver_uncon)
+    end
 
     # Build Augmented Lagrangian Objective
     alobj = ALObjective(prob)

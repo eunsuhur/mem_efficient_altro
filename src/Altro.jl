@@ -49,6 +49,8 @@ using RobotDynamics:
 # types
 export
     ALTROSolver,
+    MemEffAugmentedLagrangianSolver,
+    MemEffProjectedNewtonSolver,
     # iLQRSolver,
     # AugmentedLagrangianSolver,
     SolverStats,
@@ -75,16 +77,19 @@ include("ilqr/ilqr.jl")
 include("ilqr/ilqr_solve.jl")
 include("ilqr/backwardpass.jl")
 include("ilqr/rollout.jl")
+include("ilqr/memory_efficient.jl")
 # include("augmented_lagrangian/conic_penalties.jl")
 include("augmented_lagrangian/alconval.jl")
 include("augmented_lagrangian/ALconset.jl")
 include("augmented_lagrangian/alcosts.jl")
+include("augmented_lagrangian/al_memeff.jl")
 include("augmented_lagrangian/al_solver.jl")
 include("augmented_lagrangian/al_objective.jl")
 include("augmented_lagrangian/al_methods.jl")
 include("direct/primals.jl")
 include("direct/pn.jl")
 include("direct/pn_methods.jl")
+include("direct/pn_memeff.jl")
 include("altro/altro_solver.jl")
 
 include("direct/copy_blocks.jl")

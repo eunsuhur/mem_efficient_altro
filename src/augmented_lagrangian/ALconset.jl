@@ -137,10 +137,14 @@ function dual_update!(conval::ALConVal)
 	μ = conval.μ
 	λ_max = conval.params.λ_max
 	cone = TO.sense(conval.con)
-	# λ_min = TO.sense(conval.con) == Equality() ? -λ_max : zero(λ_max)
-	for i in eachindex(conval.inds)
-		λ[i] .= dual_update(cone, SVector(λ[i]), SVector(c[i]), SVector(μ[i]), λ_max) 
-	end
+		# λ_min = TO.sense(conval.con) == Equality() ? -λ_max : zero(λ_max)
+		for i in eachindex(conval.inds)
+			λ[i] .= dual_update(cone,
+                             SVector{length(λ[i])}(λ[i]),
+                             SVector{length(c[i])}(c[i]),
+                             SVector{length(μ[i])}(μ[i]),
+                             λ_max)
+		end
 end
 
 function dual_update(::Equality, λ, c, μ, λmax)

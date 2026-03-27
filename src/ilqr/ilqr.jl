@@ -9,7 +9,7 @@ simulates the system forward using the derived feedback control law.
 # Constructor
     Altro.iLQRSolver(prob, opts; kwarg_opts...)
 """
-struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,C} <: UnconstrainedSolver{T}
+struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,CJ,CE} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -48,8 +48,8 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,C} <: UnconstrainedSolver{T
     ρ::Vector{T}   # Regularization
     dρ::Vector{T}  # Regularization rate of change
 
-    cache::FiniteDiff.JacobianCache
-    exp_cache::C
+    cache::CJ
+    exp_cache::CE
     grad::Vector{T}  # Gradient
 
     logger::SolverLogger
@@ -77,14 +77,27 @@ function iLQRSolver(
 	K = [zeros(T,m,n̄) for k = 1:N-1]
     d = [zeros(T,m)   for k = 1:N-1]
 
-	D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
-	G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N+1]  # add one to the end to use as an intermediate result
+    if opts.memory_efficient
+        if prob.model isa RD.LieGroupModel
+            throw(ArgumentError("memory_efficient=true currently requires a Euclidean state model"))
+        end
+        D = DynamicsExpansion{T,n,n̄,m}[]
+        G = SizedMatrix{n,n̄,T,2,Matrix{T}}[]
+        E = TO.CostExpansion{T}(n̄,m,2)
+        quad_exp = TO.CostExpansion{T}(n,m,2)
+        Q = TO.CostExpansion{T}(n̄,m,1)
+        Qprev = TO.CostExpansion{T}(n̄,m,1)
+        S = TO.CostExpansion{T}(n̄,m,2)
+    else
+	    D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
+	    G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N+1]  # add one to the end to use as an intermediate result
 
-    E = TO.CostExpansion{T}(n̄,m,N)
-    quad_exp = TO.CostExpansion(E, prob.model)
-    Q = TO.CostExpansion{T}(n̄,m,N)
-    Qprev = TO.CostExpansion{T}(n̄,m,N)
-    S = TO.CostExpansion{T}(n̄,m,N)
+        E = TO.CostExpansion{T}(n̄,m,N)
+        quad_exp = TO.CostExpansion(E, prob.model)
+        Q = TO.CostExpansion{T}(n̄,m,N)
+        Qprev = TO.CostExpansion{T}(n̄,m,N)
+        S = TO.CostExpansion{T}(n̄,m,N)
+    end
 
     # Q_tmp = TO.QuadraticCost{T}(n̄,m)
     Q_tmp = TO.Expansion{T}(n̄,m)
@@ -93,16 +106,21 @@ function iLQRSolver(
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    cache = FiniteDiff.JacobianCache(prob.model)
+    diffmethod = RD.diffmethod(prob.model)
+    cache = if opts.memory_efficient && diffmethod isa RD.ForwardAD
+        nothing
+    else
+        FiniteDiff.JacobianCache(prob.model)
+    end
     exp_cache = TO.ExpansionCache(prob.obj)
     grad = zeros(T,N-1)
 
     logger = SolverLogging.default_logger(opts.verbose >= 2)
 	L = typeof(prob.model)
 	O = typeof(prob.obj)
-    solver = iLQRSolver{T,QUAD,L,O,n,n̄,m,n+m,typeof(exp_cache)}(
+    solver = iLQRSolver{T,QUAD,L,O,n,n̄,m,n+m,typeof(cache),typeof(exp_cache)}(
         prob.model, prob.obj, x0, xf,
-		prob.tf, N, opts, stats,
+			prob.tf, N, opts, stats,
         Z, Z̄, K, d, D, G, quad_exp, S, E, Q, Qprev, Q_tmp, Quu_reg, Qux_reg, ρ, dρ, 
         cache, exp_cache, grad, logger)
 
@@ -127,4 +145,3 @@ function reset!(solver::iLQRSolver{T}) where T
     solver.dρ[1] = 0.0
     return nothing
 end
-

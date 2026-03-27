@@ -15,9 +15,9 @@ end
 function TO.cost!(J, conval::ALConVal)
     cone = TO.sense(conval)
     for (i,k) in enumerate(conval.inds)
-        c = SVector(conval.vals[i])
-        λ = SVector(conval.λ[i])
-        μ = SVector(conval.μ[i])
+        c = SVector{length(conval.vals[i])}(conval.vals[i])
+        λ = SVector{length(conval.λ[i])}(conval.λ[i])
+        μ = SVector{length(conval.μ[i])}(conval.μ[i])
         J[k] += TO.cost(cone, λ, c, μ) 
     end
 end
@@ -46,9 +46,9 @@ function TO.cost_expansion!(E, conval)
 end
 
 function TO.cost_expansion!(::Equality, conval, i)
-    c = SVector(conval.vals[i])
+    c = SVector{length(conval.vals[i])}(conval.vals[i])
     ∇c = conval.jac[i]
-    λ = SVector(conval.λ[i])
+    λ = SVector{length(conval.λ[i])}(conval.λ[i])
     μ = conval.μ[i][1]
     
     λbar = λ + μ * c
@@ -66,10 +66,10 @@ function TO.cost_expansion!(::Equality, conval, i)
 end
 
 function TO.cost_expansion!(::Inequality, conval, i)
-    c = SVector(conval.vals[i])
+    c = SVector{length(conval.vals[i])}(conval.vals[i])
     ∇c = conval.jac[i]
     tmp = conval.tmp
-    λ = SVector(conval.λ[i])
+    λ = SVector{length(conval.λ[i])}(conval.λ[i])
     # μ = SVector(conval.μ[i])
     μ = conval.μ[i][1]
     a = @. (c >= 0) | (λ > 0)
@@ -91,10 +91,10 @@ function TO.cost_expansion!(::Inequality, conval, i)
 end
 
 function TO.cost_expansion!(cone::SecondOrderCone, conval, i)
-    c = SVector(conval.vals[i])
+    c = SVector{length(conval.vals[i])}(conval.vals[i])
     ∇c = conval.jac[i]
-    λ = SVector(conval.λ[i])
-    μ = SVector(conval.μ[i])
+    λ = SVector{length(conval.λ[i])}(conval.λ[i])
+    μ = SVector{length(conval.μ[i])}(conval.μ[i])
     Iμ = Diagonal(μ)
     ∇proj = conval.∇proj[i]  # pxp projection jacobian
     ∇²proj = conval.∇²proj[i]

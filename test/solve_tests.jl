@@ -50,4 +50,28 @@ set_options!(solver, max_state_value=100)
 solve!(solver)
 @test status(solver) == Altro.STATE_LIMIT
 
+## memory-efficient iLQR matches standard iLQR on a small unconstrained problem
+prob_std, opts_std = Problems.Cartpole(constrained=false)
+prob_me, opts_me = Problems.Cartpole(constrained=false)
+set_options!(opts_std, show_summary=false, iterations=50, iterations_inner=50)
+set_options!(opts_me, show_summary=false, iterations=50, iterations_inner=50, memory_efficient=true)
+
+solver_std = Altro.iLQRSolver(prob_std, opts_std)
+solver_me = Altro.iLQRSolver(prob_me, opts_me)
+solve!(solver_std)
+solve!(solver_me)
+@test status(solver_me) == status(solver_std)
+@test cost(solver_me) ≈ cost(solver_std) atol=1e-6 rtol=1e-6
+
+## memory-efficient ALTRO with projected Newton on constrained problem
+prob_me, opts_me = Problems.Cartpole(constrained=true)
+set_options!(opts_me,
+    show_summary=false, verbose=0, verbose_pn=false,
+    projected_newton=true, memory_efficient=true,
+    constraint_tolerance=1e-6, iterations=50, iterations_inner=50, n_steps=25,
+)
+	solver_me = ALTROSolver(prob_me, opts_me)
+	solve!(solver_me)
+	@test status(solver_me) == Altro.SOLVE_SUCCEEDED
+	@test TO.max_violation(solver_me) < 1e-6
 end

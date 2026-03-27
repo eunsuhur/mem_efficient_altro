@@ -28,11 +28,11 @@ as additional keyword arguments and will be set in the solver.
 * `TO.integration`
 * `TO.is_constrained`
 """
-struct ALTROSolver{T,S} <: ConstrainedSolver{T}
+struct ALTROSolver{T,SAL,SPN} <: ConstrainedSolver{T}
     opts::SolverOptions{T}
     stats::SolverStats{T}
-    solver_al::AugmentedLagrangianSolver{T,S}
-    solver_pn::ProjectedNewtonSolver{T}
+    solver_al::SAL
+    solver_pn::SPN
 end
 
 function ALTROSolver(prob::Problem{Q,T}, opts::SolverOptions=SolverOptions();
@@ -54,17 +54,38 @@ function ALTROSolver(prob::Problem{Q,T}, opts::SolverOptions=SolverOptions();
     set_options!(opts; kwarg_opts...)
     stats = SolverStats{T}(parent=solvername(ALTROSolver))
     solver_al = AugmentedLagrangianSolver(prob, opts, stats; solver_uncon=solver_uncon)
-    solver_pn = ProjectedNewtonSolver(prob, opts, stats)
-    link_constraints!(get_constraints(solver_pn), get_constraints(solver_al))
-    S = typeof(solver_al.solver_uncon)
-    solver = ALTROSolver{T,S}(opts, stats, solver_al, solver_pn)
+    build_pn = opts.projected_newton || opts.force_pn
+    if build_pn && opts.memory_efficient && solver_al isa MemEffAugmentedLagrangianSolver
+        # Memory-efficient PN: shares constraints with the AL solver
+        solver_pn = MemEffProjectedNewtonSolver(prob, opts, stats;
+            constraints=solver_al.constraints)
+    elseif build_pn
+        solver_pn = try
+            ProjectedNewtonSolver(prob, opts, stats)
+        catch e
+            if e isa MethodError || e isa TypeError
+                @warn "Standard ProjectedNewtonSolver failed ($(typeof(e))), falling back to MemEffProjectedNewtonSolver"
+                MemEffProjectedNewtonSolver(prob, opts, stats)
+            else
+                rethrow(e)
+            end
+        end
+    else
+        solver_pn = nothing
+    end
+    if solver_pn isa ProjectedNewtonSolver && get_constraints(solver_al) isa ALConstraintSet
+        link_constraints!(get_constraints(solver_pn), get_constraints(solver_al))
+    end
+    SAL = typeof(solver_al)
+    SPN = typeof(solver_pn)
+    solver = ALTROSolver{T,SAL,SPN}(opts, stats, solver_al, solver_pn)
     reset!(solver)
     # set_options!(solver; opts...)
     solver
 end
 
 # Getters
-@inline Base.size(solver::ALTROSolver) = size(solver.solver_pn)
+@inline Base.size(solver::ALTROSolver) = solver.solver_pn === nothing ? size(solver.solver_al) : size(solver.solver_pn)
 @inline TO.get_trajectory(solver::ALTROSolver)::Traj = get_trajectory(solver.solver_al)
 @inline TO.get_objective(solver::ALTROSolver) = get_objective(solver.solver_al)
 @inline TO.get_model(solver::ALTROSolver) = get_model(solver.solver_al)
@@ -75,7 +96,7 @@ is_constrained(solver::ALTROSolver) = !isempty(get_constraints(solver.solver_al)
 @inline get_ilqr(solver::ALTROSolver) = solver.solver_al.solver_uncon
 
 function TO.get_constraints(solver::ALTROSolver)
-    if solver.opts.projected_newton
+    if solver.solver_pn !== nothing && solver.opts.projected_newton
         get_constraints(solver.solver_pn)
     else
         get_constraints(solver.solver_al)
@@ -122,9 +143,10 @@ function solve!(solver::ALTROSolver)
         end
 
         opts.constraint_tolerance = ϵ_con
-        if (opts.projected_newton && c_max > opts.constraint_tolerance && 
+        if (solver.solver_pn !== nothing && opts.projected_newton && c_max > opts.constraint_tolerance && 
                 (status(solver) <= SOLVE_SUCCEEDED || status(solver) == MAX_ITERATIONS_OUTER)) ||
                 opts.force_pn
+            set_duals!(solver.solver_pn, get_duals(solver.solver_al))
             solve!(solver.solver_pn)
         end
 
@@ -180,4 +202,3 @@ function infeasible_objective(obj::Objective, regularizer)
     end
     TO.Objective(costs)
 end
-

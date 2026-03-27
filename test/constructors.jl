@@ -25,6 +25,19 @@ al = Altro.AugmentedLagrangianSolver(prob, opts, stats)
 ilqr = Altro.iLQRSolver(prob, opts, something_wrong=false)
 @test ilqr.opts === solver.opts
 
+# Avoid allocating Projected Newton when it is disabled
+solver = ALTROSolver(prob, opts, projected_newton=false)
+@test solver.solver_pn === nothing
+
+# Memory-efficient constructors
+solver = ALTROSolver(prob, opts, projected_newton=false, memory_efficient=true)
+@test solver.solver_al isa Altro.MemEffAugmentedLagrangianSolver
+@test solver.solver_al.solver_uncon.opts.memory_efficient
+@test isempty(solver.solver_al.solver_uncon.D)
+@test isempty(solver.solver_al.solver_uncon.G)
+@test length(solver.solver_al.solver_uncon.E) == 2
+@test length(solver.solver_al.solver_uncon.S) == 2
+
 # Solve an unconstrained problem
 ilqr = Altro.iLQRSolver(Problems.Cartpole(constrained=false)..., verbose=2)
 b0 = benchmark_solve!(ilqr)

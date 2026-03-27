@@ -101,7 +101,7 @@ and current constraint value. Assumes the constraint values have already been co
 function violation!(cval::ALConVal)
     cone = TO.sense(cval)
     for i = 1:length(cval.inds)
-        cval.viol[i] .= TO.violation(cone, SVector(cval.vals[i]))
+        cval.viol[i] .= TO.violation(cone, SVector{length(cval.vals[i])}(cval.vals[i]))
     end
 end
 
@@ -114,14 +114,15 @@ have already been computed.
 function ∇violation!(cval::ALConVal)
     cone = TO.sense(cval)
     for i = 1:length(cval.inds)
-        TO.∇violation!(cone, cval.∇viol[i], cval.jac[i], SVector(cval.vals[i]), cval.∇proj[i])
+        TO.∇violation!(cone, cval.∇viol[i], cval.jac[i],
+                       SVector{length(cval.vals[i])}(cval.vals[i]), cval.∇proj[i])
     end
 end
 
 function TO.max_violation!(cval::ALConVal)
 	s = TO.sense(cval.con)
     for i in eachindex(cval.inds)
-        cval.c_max[i] = TO.max_violation(s, SVector(cval.vals[i]))
+        cval.c_max[i] = TO.max_violation(s, SVector{length(cval.vals[i])}(cval.vals[i]))
     end
 end
 

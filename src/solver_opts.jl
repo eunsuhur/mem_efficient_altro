@@ -84,6 +84,7 @@ end
     r_threshold::T = 1.1
 
     # General options
+    memory_efficient::Bool = false
     projected_newton::Bool = true
     reuse_jacobians::Bool = false
     iterations::Int = 1000   # max number of iterations
