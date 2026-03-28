@@ -106,6 +106,12 @@ end
 
 function step_memory_efficient!(solver::iLQRSolver, J)
     to = solver.stats.to
-    @timeit_debug to "backward pass" ΔV = backwardpass_memory_efficient!(solver)
+    gpu_cache = solver.opts.gpu_cache
+    if solver.opts.gpu && gpu_cache !== nothing
+        # GPU backward pass — the backwardpass function is stored as a callable in gpu_cache
+        @timeit_debug to "backward pass (GPU)" ΔV = gpu_cache.backward_pass_fn(solver, gpu_cache)
+    else
+        @timeit_debug to "backward pass" ΔV = backwardpass_memory_efficient!(solver)
+    end
     @timeit_debug to "forward pass" forwardpass!(solver, ΔV, J)
 end

@@ -88,8 +88,12 @@ end
     projected_newton::Bool = true
     reuse_jacobians::Bool = false
     iterations::Int = 1000   # max number of iterations
-    show_summary::Bool = true 
-    verbose::Int = 0 
+    show_summary::Bool = true
+    verbose::Int = 0
+
+    # GPU options
+    gpu::Bool = false
+    gpu_cache::Any = nothing  # set by experiment code before solve!
 end
 
 function Base.copy(opts::SolverOptions)
