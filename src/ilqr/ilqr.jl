@@ -9,23 +9,26 @@ simulates the system forward using the derived feedback control law.
 # Constructor
     Altro.iLQRSolver(prob, opts; kwarg_opts...)
 """
-struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,CJ,CE} <: UnconstrainedSolver{T}
+struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,CJ,CE,TZ} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
 
     # Problem info
-    x0::MVector{n,T}
-    xf::MVector{n,T}
+    x0::Vector{T}
+    xf::Vector{T}
     tf::T
     N::Int
 
     opts::SolverOptions{T}
     stats::SolverStats{T}
 
-    # Primal Duals
-    Z::Traj{n,m,T,KnotPoint{T,n,m,L1}}
-    Z̄::Traj{n,m,T,KnotPoint{T,n,m,L1}}
+    # Primal Duals — TZ is the concrete trajectory type (e.g. Traj{n,m,T,HeapKnotPoint}
+    # or Traj{n,m,T,KnotPoint}). Making it a type parameter prevents Julia from
+    # attempting to specialise downstream methods for all possible KnotPoint types,
+    # which would OOM-crash the JIT for large n (e.g. n=16388 in the shuttling problem).
+    Z::TZ
+    Z̄::TZ
 
     # Data variables
     # K::Vector{SMatrix{m,n̄,T,L2}}  # State feedback gains (m,n,N-1)
@@ -56,19 +59,21 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,CJ,CE} <: UnconstrainedSolv
 end
 
 function iLQRSolver(
-        prob::Problem{QUAD,T}, 
-        opts::SolverOptions=SolverOptions(), 
+        prob,
+        opts::SolverOptions=SolverOptions(),
         stats::SolverStats=SolverStats(parent=solvername(iLQRSolver));
         kwarg_opts...
-    ) where {QUAD,T}
+    )
+    QUAD = TO.integration(prob)
+    T = eltype(prob.x0)
     set_options!(opts; kwarg_opts...)
 
     # Init solver results
     n,m,N = size(prob)
     n̄ = RobotDynamics.state_diff_size(prob.model)
 
-    x0 = prob.x0
-    xf = prob.xf
+    x0 = Vector{T}(prob.x0)
+    xf = Vector{T}(prob.xf)
 
     Z = prob.Z
     # Z̄ = Traj(n,m,Z[1].dt,N)
@@ -118,10 +123,11 @@ function iLQRSolver(
     logger = SolverLogging.default_logger(opts.verbose >= 2)
 	L = typeof(prob.model)
 	O = typeof(prob.obj)
-    solver = iLQRSolver{T,QUAD,L,O,n,n̄,m,n+m,typeof(cache),typeof(exp_cache)}(
+    TZ = typeof(Z)
+    solver = iLQRSolver{T,QUAD,L,O,n,n̄,m,n+m,typeof(cache),typeof(exp_cache),TZ}(
         prob.model, prob.obj, x0, xf,
 			prob.tf, N, opts, stats,
-        Z, Z̄, K, d, D, G, quad_exp, S, E, Q, Qprev, Q_tmp, Quu_reg, Qux_reg, ρ, dρ, 
+        Z, Z̄, K, d, D, G, quad_exp, S, E, Q, Qprev, Q_tmp, Quu_reg, Qux_reg, ρ, dρ,
         cache, exp_cache, grad, logger)
 
     reset!(solver)

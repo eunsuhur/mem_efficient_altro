@@ -70,6 +70,12 @@ function backwardpass!(solver::iLQRSolver{T,QUAD,L,O,n,n̄,m}) where {T,QUAD<:Qu
 end
 
 function static_backwardpass!(solver::iLQRSolver{T,QUAD,L,O,n,n̄,m}, grad_only=false) where {T,QUAD<:QuadratureRule,L,O,n,n̄,m}
+    # SMatrix/SVector unroll loops over n elements at compile time. For large n
+    # (e.g. n=16388 in the shuttling problem) this causes a JIT OOM.  Since n is
+    # a type parameter Julia constant-folds this check and eliminates the dead
+    # SMatrix/SVector code for large n, routing to the non-static backward pass instead.
+    n > 200 && return backwardpass!(solver)
+
 	N = solver.N
 
     # Objective

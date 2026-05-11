@@ -94,6 +94,9 @@ end
     # GPU options
     gpu::Bool = false
     gpu_cache::Any = nothing  # set by experiment code before solve!
+
+    # Progress callback: called as callback(stats, phase) where phase ∈ {:ilqr, :al, :pn}
+    progress_callback::Any = nothing
 end
 
 function Base.copy(opts::SolverOptions)

@@ -14,12 +14,12 @@ struct MemEffProjectedNewtonSolver{T,I<:QuadratureRule,N,M,NM,L<:AbstractModel,C
     model::L
     obj::Objective
     constraints::MemEffConstraintSet{T}
-    x0::SVector{N,T}
-    xf::SVector{N,T}
+    x0::Vector{T}
+    xf::Vector{T}
 
     # Trajectories
-    Z::Traj{N,M,T,KnotPoint{T,N,M,NM}}
-    Z̄::Traj{N,M,T,KnotPoint{T,N,M,NM}}
+    Z::Traj
+    Z̄::Traj
 
     # Solver state
     opts::SolverOptions{T}
@@ -58,11 +58,13 @@ struct MemEffProjectedNewtonSolver{T,I<:QuadratureRule,N,M,NM,L<:AbstractModel,C
 end
 
 function MemEffProjectedNewtonSolver(
-        prob::Problem{QUAD,T},
+        prob,
         opts::SolverOptions=SolverOptions(),
         stats::SolverStats=SolverStats(parent=solvername(MemEffProjectedNewtonSolver));
-        constraints::MemEffConstraintSet{T}=MemEffConstraintSet(prob.constraints, prob.model)
-    ) where {QUAD,T}
+        constraints=MemEffConstraintSet(prob.constraints, prob.model)
+    )
+    QUAD = TO.integration(prob)
+    T = eltype(prob.x0)
     n,m,N = size(prob)
 
     Z = prob.Z
@@ -105,7 +107,7 @@ function MemEffProjectedNewtonSolver(
 
     MemEffProjectedNewtonSolver{T,QUAD,n,m,n+m,typeof(prob.model),typeof(fd_cache)}(
         prob.model, prob.obj, constraints,
-        SVector{n}(prob.x0), SVector{n}(prob.xf),
+        Vector{T}(prob.x0), Vector{T}(prob.xf),
         Z, Z̄, opts, stats, N,
         K, l, jac,
         Π, π_v,
@@ -163,6 +165,9 @@ function projection_solve!(solver::MemEffProjectedNewtonSolver)
         viol = _memeff_projection_step!(solver)
         count += 1
         _memeff_record_iteration!(solver, viol)
+        if solver.opts.progress_callback !== nothing
+            solver.opts.progress_callback(solver.stats, :pn)
+        end
     end
     return viol
 end

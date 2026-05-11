@@ -86,7 +86,7 @@ function TO.evaluate!(conSet::MemEffConstraintSet, Z::RD.AbstractTrajectory)
     end
 end
 
-@inline _to_svec(v::AbstractVector) = SVector{length(v)}(v)
+@inline _to_svec(v::AbstractVector) = v
 
 function TO.cost!(J::Vector{<:Real}, conSet::MemEffConstraintSet)
     for conval in conSet.convals
@@ -325,6 +325,35 @@ function MemEffAugmentedLagrangianSolver(
     return solver
 end
 
+# HeapProblem variant — avoids SVector/MVector for large state dimensions
+function MemEffAugmentedLagrangianSolver(
+        prob,  # duck-typed HeapProblem
+        opts::SolverOptions,
+        stats::SolverStats,
+        ::Val{:heap};
+        solver_uncon=iLQRSolver,
+        kwarg_opts...
+    )
+    T = eltype(prob.x0)
+    set_options!(opts; kwarg_opts...)
+    opts.memory_efficient = true
+
+    conset = MemEffConstraintSet(prob.constraints, prob.model)
+    obj = MemEffALObjective{T,typeof(prob.obj),typeof(conset)}(prob.obj, conset)
+    TO.rollout!(prob)
+
+    # Repackage with AL objective, reusing the trajectory directly
+    n, m = size(prob.model)
+    prob_al = typeof(prob)(
+        prob.model, obj, TO.ConstraintList(n, m, prob.N),
+        prob.x0, prob.xf, prob.Z, prob.N, prob.t0, prob.tf)
+
+    solver_uncon = solver_uncon(prob_al, opts, stats)
+    solver = MemEffAugmentedLagrangianSolver(opts, stats, solver_uncon, conset)
+    reset!(solver)
+    return solver
+end
+
 function reset!(solver::MemEffAugmentedLagrangianSolver)
     reset_solver!(solver)
     reset!(solver.solver_uncon)
@@ -385,6 +414,9 @@ function solve!(solver::MemEffAugmentedLagrangianSolver{T,S}) where {T,S}
         TO.max_violation!(conSet)
         c_max = isempty(conSet.c_max) ? zero(T) : maximum(conSet.c_max)
         record_iteration!(solver, J, c_max)
+        if solver.opts.progress_callback !== nothing
+            solver.opts.progress_callback(solver.stats, :al)
+        end
 
         evaluate_convergence(solver) && break
 

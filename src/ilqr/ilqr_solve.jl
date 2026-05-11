@@ -38,6 +38,9 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
 
         # Record iteration and evaluate convergence
         record_iteration!(solver, J, dJ)
+        if solver.opts.progress_callback !== nothing
+            solver.opts.progress_callback(solver.stats, :ilqr)
+        end
         exit = evaluate_convergence(solver, i)
 
         # check if the cost function is quadratic

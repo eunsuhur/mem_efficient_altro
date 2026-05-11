@@ -2,6 +2,16 @@ export
 	benchmark_solve!,
 	shift_fill!
 
+# Override Base.copy for Traj to use element-wise copy(z) dispatch.
+# The upstream default in RobotDynamics explicitly calls the KnotPoint constructor,
+# which creates SVector-backed knot points.  For custom AbstractKnotPoint subtypes
+# (e.g. HeapKnotPoint with Vector-backed storage), this triggers SVector{n+m}
+# construction and crashes the compiler when n is large (>~100).
+# Element-wise copy(z) dispatches correctly to each knot-point type's own copy method.
+function Base.copy(Z::Traj)
+    RD.Traj([copy(z) for z in Z])
+end
+
 function interp_rows(N::Int,tf::Float64,X::AbstractMatrix)::Matrix
     n,N1 = size(X)
     t1 = range(0,stop=tf,length=N1)
