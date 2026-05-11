@@ -84,6 +84,38 @@ function ALTROSolver(prob::Problem{Q,T}, opts::SolverOptions=SolverOptions();
     solver
 end
 
+# Duck-typed ALTROSolver constructor for non-Problem types (e.g. HeapProblem from
+# qoc-experiments-mem-eff). Routes through the memory-efficient AL+PN stack since
+# heap-backed problems exist precisely to avoid SArray-based KnotPoints for large n.
+# Infeasible mode is not supported here (InfeasibleProblem expects a TO.Problem).
+function ALTROSolver(prob, opts::SolverOptions=SolverOptions();
+        infeasible::Bool=false,
+        R_inf::Real=1.0,
+        solver_uncon=iLQRSolver,
+        kwarg_opts...
+    )
+    infeasible && throw(ArgumentError(
+        "infeasible=true is only supported for TO.Problem, not $(typeof(prob))"))
+    set_options!(opts; kwarg_opts...)
+    opts.memory_efficient = true   # heap problems require the MemEff path
+    T = eltype(prob.x0)
+    stats = SolverStats{T}(parent=solvername(ALTROSolver))
+    solver_al = MemEffAugmentedLagrangianSolver(prob, opts, stats, Val(:heap);
+        solver_uncon=solver_uncon)
+    build_pn = opts.projected_newton || opts.force_pn
+    solver_pn = if build_pn
+        MemEffProjectedNewtonSolver(prob, opts, stats;
+            constraints=solver_al.constraints)
+    else
+        nothing
+    end
+    SAL = typeof(solver_al)
+    SPN = typeof(solver_pn)
+    solver = ALTROSolver{T,SAL,SPN}(opts, stats, solver_al, solver_pn)
+    reset!(solver)
+    solver
+end
+
 # Getters
 @inline Base.size(solver::ALTROSolver) = solver.solver_pn === nothing ? size(solver.solver_al) : size(solver.solver_pn)
 @inline TO.get_trajectory(solver::ALTROSolver)::Traj = get_trajectory(solver.solver_al)

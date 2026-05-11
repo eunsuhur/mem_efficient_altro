@@ -9,7 +9,7 @@ standard dense Schur complement approach.
 Based on: Rao, Wright, Rawlings (1998) "Application of Interior-Point
 Methods to Model Predictive Control", J. Opt. Theory Appl.
 """
-struct MemEffProjectedNewtonSolver{T,I<:QuadratureRule,N,M,NM,L<:AbstractModel,C} <: ConstrainedSolver{T}
+struct MemEffProjectedNewtonSolver{T,I<:QuadratureRule,N,M,NM,L<:AbstractModel,C,TZ} <: ConstrainedSolver{T}
     # Problem data
     model::L
     obj::Objective
@@ -17,9 +17,11 @@ struct MemEffProjectedNewtonSolver{T,I<:QuadratureRule,N,M,NM,L<:AbstractModel,C
     x0::Vector{T}
     xf::Vector{T}
 
-    # Trajectories
-    Z::Traj
-    Z̄::Traj
+    # Trajectories — TZ is the concrete trajectory type. Making it a type parameter
+    # prevents Julia from speculatively compiling for SArray-backed KnotPoints (e.g.
+    # GeneralKnotPoint{T,16388,2,SArray{16390}}), which OOMs the JIT for large n.
+    Z::TZ
+    Z̄::TZ
 
     # Solver state
     opts::SolverOptions{T}
@@ -105,7 +107,8 @@ function MemEffProjectedNewtonSolver(
     end
     exp_cache = TO.ExpansionCache(prob.obj)
 
-    MemEffProjectedNewtonSolver{T,QUAD,n,m,n+m,typeof(prob.model),typeof(fd_cache)}(
+    TZ = typeof(Z)
+    MemEffProjectedNewtonSolver{T,QUAD,n,m,n+m,typeof(prob.model),typeof(fd_cache),TZ}(
         prob.model, prob.obj, constraints,
         Vector{T}(prob.x0), Vector{T}(prob.xf),
         Z, Z̄, opts, stats, N,
